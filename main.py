@@ -1,8 +1,8 @@
 import math
 import pygame
-
-
-
+from math import pi
+import PyParticles
+import poly_point_isect
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 1000
 
@@ -10,10 +10,15 @@ SCREEN_HEIGHT = 1000
 WHITE = (255, 255, 255)
 RED   = (255,   0,   0)
 
-FPS = 120
+FPS = 7000
 
 pygame.init()
 
+universe = PyParticles.Environment((SCREEN_WIDTH, SCREEN_HEIGHT))
+universe.colour = (255, 255, 255)
+universe.addFunctions(['move', 'bounce', 'collide', 'drag', 'accelerate', 'attract'])
+universe.acceleration = (pi, 0)
+universe.mass_of_air = 10
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 #screen_rect = screen.get_rect()
 
@@ -21,13 +26,37 @@ pygame.display.set_caption("web boi")
 
 
 def text_to_screen(screen, text, x, y, size = 20,
-    color = (255,255,255), font_type = 'arial'):
+    color = (0,0,0), font_type = 'arial'):
 
     text = str(text)
     font = pygame.font.SysFont(font_type, size)
     text = font.render(text, True, color)
-    screen.blit(text, (x, y))
+    text_rect = text.get_rect()
 
+    screen.blit(text, (x-text_rect.width//2, y - text_rect.height//2))
+
+def draw_arrow(screen, start2, end2, colour=(0,0,0)):
+    start = start2.copy()
+    end = end2.copy()
+    x_diff = -start[0] + end[0]
+    y_diff = -start[1] + end[1]
+    distance = math.sqrt(x_diff ** 2 + y_diff ** 2)
+    cutoff = 20
+    if distance > cutoff:
+        #print(distance)
+        # proportion = 0.8
+        # end[0] = int(start[0] + proportion * x_diff)
+        # end[1] = int(start[1] + proportion * y_diff)
+
+        end[0] = int(end[0] - cutoff * x_diff/distance)
+        end[1] = int(end[1] - cutoff * y_diff/distance)
+        #print(start[0]- end[0], start[1] - end[1])
+        #print(end[0], end[1])
+
+    pygame.draw.aaline(screen,colour,start,end,2)
+    rotation = math.degrees(math.atan2(start[1]-end[1], end[0]-start[0]))+90
+    scale = 5
+    pygame.draw.polygon(screen, (0, 0, 0), ((end[0]+scale*math.sin(math.radians(rotation)), end[1]+scale*math.cos(math.radians(rotation))), (end[0]+scale*math.sin(math.radians(rotation-120)), end[1]+scale*math.cos(math.radians(rotation-120))), (end[0]+scale*math.sin(math.radians(rotation+120)), end[1]+scale*math.cos(math.radians(rotation+120)))))
 
 
 class animal:
@@ -36,19 +65,9 @@ class animal:
 
     def addDiet(self, diets):
         self.diets = diets
-class rectclass:
-    def __init__(self, a, b, c, d, val):
-        self.rectang = pygame.rect.Rect(a, b, c, d)
-        self.dragging = False
-        self.pos = [a,b]
-        self.val = val
 
-def draw_arrow(screen, colour, start, end):
-    pygame.draw.aaline(screen,colour,start,end,2)
-    # rotation = math.degrees(math.atan2(start[1]-end[1], end[0]-start[0]))+90
-    # scale = 5
-    # pygame.draw.polygon(screen, (0, 0, 0), ((end[0]+scale*math.sin(math.radians(rotation)), end[1]+scale*math.cos(math.radians(rotation))), (end[0]+scale*math.sin(math.radians(rotation-120)), end[1]+scale*math.cos(math.radians(rotation-120))), (end[0]+scale*math.sin(math.radians(rotation+120)), end[1]+scale*math.cos(math.radians(rotation+120)))))
-    pygame.draw.circle(screen, (0,255,0), end, 3)  # Here <<<
+
+
 allStuff = [
     "bat",
     "muskrat",
@@ -82,130 +101,97 @@ diets = [
     ("mosquito",),
     ("peeper", "fish"),
     ("beetle",),
-    ("milkweed",),
+    ("milkweed","muskrat", "bat"),
     (),
     ("mosquito", "bulrush", "clam"),
     (),
     ("mosquito", "cattail")
 ]
-print(len(diets) == len(allStuff))
 
-allAnimals = {}
-allObjects = {}
+indexDict = {
+
+}
 for i in range(len(allStuff)):
-    allAnimals[allStuff[i]] = diets[i]
-for name, diet in allAnimals.items():
-    newAnimal = animal(name)
-    newAnimal.addDiet(diet)
-    #allObjects[name] = newAnimal
+    indexDict[allStuff[i]] = i
 clock = pygame.time.Clock()
-print(allAnimals)
-print(allObjects)
-allRects = []
 counter = 0
-print(allStuff)
 for i in range(4):
     for y in range(5):
-        print(5 * i + y)
+        #print(5 * i + y)
         if counter < 17:
             counter += 1
-            left = i * 120
-            top = y * 120
-            newRect = rectclass(left, top, 80, 80, allStuff[i*5 + y])
-            allRects.append(newRect)
-            #print(allStuff[i*4 + y])
-            allObjects[allStuff[i*5 + y]] = newRect
+            left = i * 240
+            top = y * 240
+            print(5 * i + y - 1)
+            universe.addParticles(mass=1000, size=1, speed=10, elasticity=0.1, colour=(20, 40, 200),  val=allStuff[5 * i + y ])
+
+
         else:
             break
 totalReceivers = {}
 
 for i in range(len(allStuff)):
-    x = allStuff[i]
-    dietArray = diets[i]
-    for y in dietArray:
-        if y not in totalReceivers:
-            totalReceivers[y] = [x]
-        else:
-            totalReceivers[y].append(x)
+    totalReceivers[allStuff[i]] = diets[i]
 
 print(totalReceivers)
+
+for pred, preys in totalReceivers.items():
+    for prey in preys:
+        universe.addSpring( indexDict[pred],indexDict[prey], length=100, strength=0.5)
 cool_gradient = 0
-#print(allObjects)
+
 
 running = True
 current_dragged = False
+selected_particle = None
+paused = False
+running = True
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE:
+                universe.mass_of_air=10000
+                print('down')
+            else:
+                universe.mass_of_air = 10
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            selected_particle = universe.findParticle(pygame.mouse.get_pos())
+        if event.type == pygame.MOUSEBUTTONUP:
+            selected_particle = None
 
-        elif event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:
-                for rectangle in allRects:
-                    if rectangle.rectang.collidepoint(event.pos):
-                        rectangle.dragging = True
-                        mouse_x, mouse_y = event.pos
-                        offset_x = rectangle.rectang.x - mouse_x
-                        offset_y = rectangle.rectang.y - mouse_y
-                        current_dragged = rectangle.val
+    if selected_particle:
+        selected_particle.mouseMove(pygame.mouse.get_pos())
+    if not paused:
+        universe.update()
 
-                        break
+    screen.fill(universe.colour)
 
-        elif event.type == pygame.MOUSEBUTTONUP:
-            if event.button == 1:
-                for rectangle in allRects:
-                    if rectangle.dragging:
-                        rectangle.dragging = False
-                        current_dragged = False
-                        break
+    for p in universe.particles:
+        #pygame.draw.circle(screen, p.colour, (int(p.x), int(p.y)), p.size, 0)
+        text_to_screen(screen, p.val, int(p.x), int(p.y))
+    tot_speed = 0
+    for particle in universe.particles:
+        tot_speed += particle.speed
+    if tot_speed > 3:
+        text_to_screen(screen, "Speed till equilibrium: " + str(round(tot_speed-3, 3)), 500,20)
+    else:
+        text_to_screen(screen, "Equilibrium!", 500, 20)
 
-        elif event.type == pygame.MOUSEMOTION:
-            if current_dragged:
-                rectangle = allObjects[current_dragged]
-                if rectangle.dragging:
-                    mouse_x, mouse_y = event.pos
-                    rectangle.rectang.x = mouse_x + offset_x
-                    rectangle.pos[0] = mouse_x + offset_x
-                    rectangle.rectang.y = mouse_y + offset_y
-                    rectangle.pos[1] = mouse_y + offset_y
-                    break
-
-    # - updates (without draws) -
-
-    # empty
-
-    # - draws (without updates) -
-
-    screen.fill((0,0,0))
-
-    for rectangle in allRects:
-        pygame.draw.rect(screen, (0,0,255), rectangle.rectang)
-        text_to_screen(screen, rectangle.val, rectangle.pos[0], rectangle.pos[1])
-        #print(allAnimals[rectangle.val])
-    for prey, predators in allAnimals.items():
-        p_x, p_y = allObjects[prey].pos
-
-        if predators:
-
-
-            for predator in predators:
-                rectangle = allObjects[predator]
-                draw_arrow(screen, (0, 200, 200), (rectangle.pos[0] + 40, rectangle.pos[1] + 40), (p_x + 20, p_y + 20))
-    cool_gradient = (cool_gradient+1)% 255
-    # for rectangle in allRects:
-    #
-    #     for diet in allAnimals[rectangle.val]:
-    #
-    #         prey_x, prey_y = allObjects[diet].pos
-    #         draw_arrow(screen, (0,0,0),(prey_x+40, prey_y+40), (rectangle.pos[0] + 40, rectangle.pos[1] + 40))
+    segments = []
+    for s in universe.springs:
+        draw_arrow(screen, [int(s.p2.x), int(s.p2.y)], [int(s.p1.x), int(s.p1.y)])
+        segments.append(((s.p2.x, s.p2.y), (s.p1.x, s.p1.y)))
+        #segments.append())
+    isect = poly_point_isect.isect_segments__naive(segments)
+    text_to_screen(screen, "Total intersections: " + str(len(isect)), 500, 50)
+    for pt in isect:
+        pt = list(pt)
+        pt[0] = int(pt[0])
+        pt[1] = int(pt[1])
+        pygame.draw.circle(screen, (255,0,0), pt, 2)
 
 
     pygame.display.flip()
-
-    # - constant game speed / FPS -
-
     clock.tick(FPS)
-
-    # - end -
-
-pygame.quit()
